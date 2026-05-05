@@ -1,0 +1,135 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Repository Status
+
+Pre-code. No commits, no source tree, no package manifest yet. Stack is **partially locked** (see Architecture) but language choice for the backend is still open. Once the first scaffold lands, update the "Commands" section below with real build/lint/test invocations — do not invent them before then.
+
+## What This Product Is
+
+**TikTok Live Shop Bundle Optimizer** — a bundle intelligence platform for TikTok Shop sellers. The wedge is: bundle suggestions powered by a shop's own transaction data, layered with cross-shop network effects. Trend scrapers and competitor monitoring exist elsewhere; this product wins by being the only tool that learns each shop's specific basket dynamics.
+
+**Target segment for v1 is narrow and intentional:** mid-tier multi-SKU live sellers (20–100 active SKUs) in complementary-product categories (beauty, supplements, fashion accessories, baby). Reference customer profile: Miss Lil USA. Tiny shops (<10 SKUs) and pure dropshippers are explicitly out of scope. Do not generalize features to "every shop" — that's a v2+ problem.
+
+## Locked Product Decisions
+
+These are not up for debate during implementation. If a task seems to violate one, surface it before coding.
+
+1. **Tier 0 unit = one bundle suggestion.** Always. Framed as a live/content prompt ("feature this in your next live"), not pure merchandising. Crisis interrupts (stockouts, price wars) appear in a thin alert band above the bundle card; the band is empty 95% of days.
+2. **Notification budget capped at ~5–8/week** across daily heartbeat, pre-live prep alert, event-triggered interrupts, weekly digest. **No pushes during live.**
+3. **Cadence ramps with data maturity.** Weeks 1–2 event-triggered only; daily heartbeat unlocks at ~50+ orders of signal; pre-live prep at month 2; weekly digest at month 3. Do not ship the full cadence stack on day one.
+4. **Three confidence tiers, each with its own surface:** Strong → daily heartbeat/push/headline. Worth testing → pre-live brief + explore tab. Experimental → explore tab only. If no Strong bundle qualifies for the heartbeat, fall back to top-performer/inventory/trend content — **never demote a weak bundle into the headline slot.**
+5. **Every suggestion needs a "why this?" expansion** — data points, projected lift, similar-shop comparison. No black boxes.
+6. **Mobile is primary, not secondary.** Sellers run lives from phones. The React Native companion is a critical surface, not an afterthought.
+
+## Architecture
+
+### Data sources
+- **TikTok Shop Partner API** (OAuth per shop) — orders, products, inventory, fulfillment webhooks. This is the primary ingestion path.
+- **TikTok Creative Center** — trend signals (hashtags, sounds, top products by category/region).
+- **Live stream metadata** where exposed — viewer count, engagement deltas tied to product showcases.
+- **Competitor scraping** — deferred to v2; do not build it into v1.
+
+### Storage layout
+- **Postgres** — relational core: `shops`, `products`, `orders`, `bundles`, `users`, `suggestions`, `suggestion_outcomes`. Schema is an open question; design carefully when first written.
+- **TimescaleDB or ClickHouse** — time-series for hourly heat scores, trend velocity, transaction streams. Pick one when the analytics layer lands.
+- **pgvector** — semantic product matching (catalog ↔ trending items ↔ competitor SKUs). Used for cold start before transaction history exists.
+- **Redis** — hot caches, rate limits, live-session signals.
+- **S3** — product images, scraped snapshots.
+
+### Processing
+- **Job queue** — BullMQ (Node) or Celery (Python), dictated by the backend language choice.
+- **Event stream** — Redis Streams to start. Kafka only if/when scale demands it; do not preemptively introduce it.
+- **Analytics service has two layers:**
+  - Deterministic: **FP-Growth / Apriori** for basket affinity (this is the v1 engine).
+  - Learned: margin-weighted ranking → learning-to-rank as suggestion outcomes accumulate. After ~6 months the system stops doing market-basket analysis and starts predicting "will this seller adopt this bundle and will it lift margin."
+
+### App layer
+- **Backend API** — FastAPI (Python) or Node (TypeScript). **Pick one and commit before writing the second module.** Mixing breaks the job-queue choice.
+- **Web dashboard** — Next.js.
+- **Mobile companion** — React Native. Treat as a first-class client of the same API.
+- **Webhook handlers** — TikTok Shop order events.
+
+## Bundle Algorithm
+
+Scoring function for any candidate bundle B:
+
+```
+Score(B) = w1·affinity_lift
+         + w2·margin_uplift
+         + w3·inventory_pressure
+         + w4·trend_alignment
+         − w5·cannibalization_risk
+```
+
+- **affinity_lift** — `P(B together) / (P(item1) × P(item2))` on rolling 30/60/90-day windows.
+- **margin_uplift** — projected bundle margin minus what items would have earned sold separately at typical conversion rates.
+- **inventory_pressure** — bonus for items aging past N days or sitting above target stock.
+- **trend_alignment** — bonus when one item is heating up on Creative Center signals.
+- **cannibalization_risk** — penalty when a bundle mostly replaces existing high-margin solo sales.
+
+Weights become **per-shop tunable** as the system learns each seller's optimization preference.
+
+**Detect bundle archetypes separately** — they have different UX framings: complementary, volume packs, tier-up, discovery, clearance recovery.
+
+**Cold start path** (new shop, no transaction history): semantic priors via pgvector → category defaults (once ~50+ shops per vertical) → optional imported affinity from pasted Shopify/Amazon order history during onboarding.
+
+**Feedback loop** — every suggestion is an experiment. Adopted/Ignored/Modified are all signals; **Modified is the highest-value signal** because it captures seller domain knowledge. All three feed the learning-to-rank model.
+
+**Cross-shop network effect is the moat**, not the algorithm. Once ~50+ shops per vertical exist, surface privacy-preserving aggregate signal ("Beauty shops your size are bundling X+Y at 38% higher margin"). The privacy model (k-anonymity thresholds, opt-in vs opt-out) is an open question — do not ship aggregate signal without resolving it.
+
+## MVP Scope
+
+### v1 — the bundle wedge (ship first)
+1. OAuth shop connection + 90-day order backfill.
+2. Basket affinity engine (FP-Growth) with margin overlay.
+3. Dashboard showing top-performing bundles, 5–10 suggested new bundles ranked by projected margin × confidence, per-bundle performance tracking.
+4. Daily heartbeat push + weekly digest email.
+
+### v1.5 — trend pulse
+1. Daily Creative Center pull.
+2. Semantic match: "3 trending items overlap with your catalog" + restock/promote nudge.
+
+### Deferred — do not build in v1
+Competitor scraping, live-stream real-time recommendations, multi-shop/agency dashboards, pricing optimization (strong fast-follow candidate), demand forecasting.
+
+## Anti-Patterns
+
+When a task drifts toward any of these, push back:
+
+1. **No generic dashboards.** Shopify and TikTok already show revenue-by-category pie charts. This product gives answers and next actions, not visualizations.
+2. **Don't optimize for notification opens.** That metric pushes the product toward over-suggestion. Optimize for quality of action taken.
+3. **Don't ship the full cadence stack on day one.** A half-trained model + full notification volume = unsubscribe before the model gets smart.
+4. **No black-box suggestions.** Every suggestion ships with its rationale.
+5. **Don't broaden the v1 segment.** Mid-tier multi-SKU live sellers in beauty/lifestyle. That's it.
+
+## Commands
+
+*To be filled in when the first package manifest lands.* Update this section with:
+- install / bootstrap
+- dev server (web, API, mobile)
+- lint
+- typecheck
+- test (full suite + single-test invocation)
+- DB migrations
+- worker / job-queue runner
+
+Until then, there are no commands to run.
+
+## Open Questions
+
+In rough priority order — these block design or implementation work and should be resolved with the user before deep coding in the affected area:
+
+1. Concrete Postgres schema for `shops`, `products`, `orders`, `bundles`, `suggestions`, `suggestion_outcomes`.
+2. Onboarding flow — OAuth handshake, historical backfill UX, first-suggestion delivery under cold start.
+3. Suggestion screen UI/UX — headline card, "why this?" expansion, explore tab, live-mode view.
+4. TikTok Shop Partner API access — application process, scopes needed, sandbox setup.
+5. Bundle outcome measurement — synthetic control methodology, holdout periods, significance thresholds for declaring a bundle a winner.
+6. Cross-shop privacy model — what is shared, k-anonymity thresholds, opt-in vs opt-out.
+7. **Backend language choice (Python/FastAPI vs Node/TypeScript).** Resolve before the second backend module.
+
+## External References
+
+- TikTok Shop Partner Center: https://partner.tiktokshop.com
+- TikTok Creative Center: https://ads.tiktok.com/business/creativecenter
