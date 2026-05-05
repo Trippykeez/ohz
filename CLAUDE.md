@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Status
 
-Pre-code. No commits, no source tree, no package manifest yet. Stack is **partially locked** (see Architecture) but language choice for the backend is still open. Once the first scaffold lands, update the "Commands" section below with real build/lint/test invocations — do not invent them before then.
+MVP scaffold landed. Stack is now **fully locked**: Node/TypeScript with Next.js (App Router) for both API and dashboard. SQLite is the dev/demo store via `better-sqlite3`; production swap path is Postgres (the schema in `src/db/schema.sql` stays inside a Postgres-compatible subset). No real TikTok Shop Partner API integration yet — the demo seed simulates 90 days of orders for one beauty shop. See **Commands** below.
+
+The Python/FastAPI alternative is shelved for now. Revisit only if a future workload (heavy ML training, scientific libraries) makes the Python ecosystem decisively better than the unified TypeScript stack.
 
 ## What This Product Is
 
@@ -39,17 +41,28 @@ These are not up for debate during implementation. If a task seems to violate on
 - **S3** — product images, scraped snapshots.
 
 ### Processing
-- **Job queue** — BullMQ (Node) or Celery (Python), dictated by the backend language choice.
+- **Job queue** — BullMQ when async processing lands. The MVP runs the pipeline synchronously via `npm run engine:run` or `POST /api/regenerate`; convert to a queued worker once we're hitting real shops.
 - **Event stream** — Redis Streams to start. Kafka only if/when scale demands it; do not preemptively introduce it.
 - **Analytics service has two layers:**
-  - Deterministic: **FP-Growth / Apriori** for basket affinity (this is the v1 engine).
+  - Deterministic: Apriori-style frequent itemset mining truncated at k=3 (`src/engine/affinity.ts`). Swap for full FP-Growth when shops exceed ~10k orders or we want larger bundles.
   - Learned: margin-weighted ranking → learning-to-rank as suggestion outcomes accumulate. After ~6 months the system stops doing market-basket analysis and starts predicting "will this seller adopt this bundle and will it lift margin."
 
 ### App layer
-- **Backend API** — FastAPI (Python) or Node (TypeScript). **Pick one and commit before writing the second module.** Mixing breaks the job-queue choice.
-- **Web dashboard** — Next.js.
-- **Mobile companion** — React Native. Treat as a first-class client of the same API.
-- **Webhook handlers** — TikTok Shop order events.
+- **Backend + dashboard** — Next.js 15 App Router, TypeScript, server components reading directly from SQLite via `src/db/client.ts`. Server-side mutations through API routes under `src/app/api/`.
+- **Mobile companion** — React Native, not yet built. Treat as a first-class client of the same API; the JSON shape returned by `loadDashboard` should map cleanly to mobile views.
+- **Webhook handlers** — TikTok Shop order events. Not implemented; will live under `src/app/api/webhooks/`.
+
+### Code map (current)
+
+```
+src/
+  db/           schema.sql, client (better-sqlite3 singleton), init, seed
+  engine/       affinity, scoring, archetypes, alerts, pipeline, run (CLI)
+  lib/          types, queries (dashboard read model), random (seeded PRNG)
+  app/          page.tsx (dashboard), components/, api/{outcomes,regenerate}
+```
+
+Suggestion lifecycle: `runPipeline(shopId)` wipes prior suggestions, mines itemsets from the rolling 90-day window, scores + classifies tier + detects archetype, picks at most one Strong-tier headline, persists to `suggestions` + `suggestion_items`, and writes alerts. The dashboard reads via `loadDashboard`. Outcomes posted to `/api/outcomes` append to `suggestion_outcomes` and feed the (future) learning-to-rank model.
 
 ## Bundle Algorithm
 
@@ -106,28 +119,43 @@ When a task drifts toward any of these, push back:
 
 ## Commands
 
-*To be filled in when the first package manifest lands.* Update this section with:
-- install / bootstrap
-- dev server (web, API, mobile)
-- lint
-- typecheck
-- test (full suite + single-test invocation)
-- DB migrations
-- worker / job-queue runner
+```
+npm install              # bootstrap (installs better-sqlite3 native module)
+npm run dev              # Next.js dev server on :3000 — dashboard + API
+npm run build            # production build (also runs Next.js type checking)
+npm run start            # serve the production build
+npm run typecheck        # tsc --noEmit
+npm run lint             # next lint
 
-Until then, there are no commands to run.
+npm run db:init          # create / migrate schema (idempotent)
+npm run db:seed          # seed the demo beauty shop (upserts)
+npm run db:reset         # rm ohz.db && db:init && db:seed
+npm run engine:run       # run the suggestion pipeline against the demo shop
+```
+
+There is no test suite yet. When one lands, document the runner here and a single-test invocation pattern.
+
+Manual end-to-end flow:
+```
+npm install
+npm run db:reset
+npm run engine:run       # generates suggestions + alerts
+npm run dev              # open http://localhost:3000
+```
+
+The dashboard re-runs the pipeline on demand via `POST /api/regenerate`. Outcome feedback (Adopt / Modify / Skip) posts to `POST /api/outcomes`.
 
 ## Open Questions
 
 In rough priority order — these block design or implementation work and should be resolved with the user before deep coding in the affected area:
 
-1. Concrete Postgres schema for `shops`, `products`, `orders`, `bundles`, `suggestions`, `suggestion_outcomes`.
-2. Onboarding flow — OAuth handshake, historical backfill UX, first-suggestion delivery under cold start.
-3. Suggestion screen UI/UX — headline card, "why this?" expansion, explore tab, live-mode view.
-4. TikTok Shop Partner API access — application process, scopes needed, sandbox setup.
-5. Bundle outcome measurement — synthetic control methodology, holdout periods, significance thresholds for declaring a bundle a winner.
-6. Cross-shop privacy model — what is shared, k-anonymity thresholds, opt-in vs opt-out.
-7. **Backend language choice (Python/FastAPI vs Node/TypeScript).** Resolve before the second backend module.
+1. **TikTok Shop Partner API access** — application process, scopes needed, sandbox setup. The MVP currently fakes ingestion via the seed script.
+2. **Onboarding flow** — OAuth handshake, historical backfill UX, first-suggestion delivery under cold start.
+3. **SQLite → Postgres migration path** — when to flip, how to handle the schema diff (most types map straight across; `INTEGER` epoch ms columns become `TIMESTAMPTZ`).
+4. **Bundle outcome measurement** — synthetic control methodology, holdout periods, significance thresholds for declaring a bundle a winner. The current `suggestion_outcomes` table records intent but not realized lift.
+5. **Cross-shop privacy model** — what is shared, k-anonymity thresholds, opt-in vs opt-out. The "similar shops" line in `why_json` is a placeholder string until this is resolved.
+6. **Notification cadence machinery** — daily heartbeat, pre-live prep alert, weekly digest. None of these are wired yet; the dashboard is the only surface.
+7. **Tunable per-shop weights** for `Score(B)`. Currently `DEFAULT_WEIGHTS` in `src/engine/scoring.ts` is shared across shops.
 
 ## External References
 

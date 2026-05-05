@@ -1,0 +1,30 @@
+{
+  "name": "ohz",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:init": "tsx src/db/init.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:reset": "rm -f ohz.db && npm run db:init && npm run db:seed",
+    "engine:run": "tsx src/engine/run.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "next": "15.0.3",
+    "react": "19.0.0-rc-66855b96-20241106",
+    "react-dom": "19.0.0-rc-66855b96-20241106"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
