@@ -1,4 +1,4 @@
-import { initSchema } from '../db/client.ts';
+import { initSchema, getDb } from '../db/client.ts';
 import { loadDashboard } from '../lib/queries.ts';
 import { AlertBand } from './components/AlertBand.tsx';
 import { BundleHeadline, HeadlineFallback } from './components/BundleHeadline.tsx';
@@ -7,13 +7,36 @@ import { OutcomesFeed } from './components/OutcomesFeed.tsx';
 
 export const dynamic = 'force-dynamic';
 
-const SHOP_ID = 'shop_demo_beauty';
+const DEMO_SHOP_ID = 'shop_demo_beauty';
 
-export default function Page() {
+interface ShopRow {
+  id: string;
+  name: string;
+}
+
+function listShops(): ShopRow[] {
+  return getDb()
+    .prepare(`SELECT id, name FROM shops ORDER BY connected_at DESC`)
+    .all() as ShopRow[];
+}
+
+function resolveShopId(requested: string | undefined, shops: ShopRow[]): string | null {
+  if (requested && shops.some(s => s.id === requested)) return requested;
+  if (shops.some(s => s.id === DEMO_SHOP_ID)) return DEMO_SHOP_ID;
+  return shops[0]?.id ?? null;
+}
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ shop?: string }>;
+}) {
   initSchema();
-  const data = loadDashboard(SHOP_ID);
+  const params = await searchParams;
+  const shops = listShops();
+  const shopId = resolveShopId(params.shop, shops);
 
-  if (!data.shop) {
+  if (!shopId) {
     return (
       <main className="container">
         <div className="topbar">
@@ -21,12 +44,29 @@ export default function Page() {
           <span className="meta">No shop connected</span>
         </div>
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>Connect a TikTok Shop to begin</h2>
+          <h2 style={{ marginTop: 0 }}>Bring your sales data</h2>
           <p>
-            For the MVP, run <code>npm run db:reset</code> then <code>npm run engine:run</code> to
-            seed the demo beauty shop and generate suggestions. Real OAuth + Partner API ingestion
-            replaces this onboarding step in v1.
+            Import a TikTok Shop order export to start mining your bundle affinity.{' '}
+            <a href="/import">Open the importer →</a>
           </p>
+          <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>
+            Or run <code>npm run db:reset</code> to seed the demo beauty shop.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const data = loadDashboard(shopId);
+  if (!data.shop) {
+    return (
+      <main className="container">
+        <div className="topbar">
+          <h1>ohz · Bundle Optimizer</h1>
+          <a className="meta" href="/import">Import sales data →</a>
+        </div>
+        <div className="card">
+          <p>Shop not found.</p>
         </div>
       </main>
     );
@@ -37,9 +77,32 @@ export default function Page() {
       <div className="topbar">
         <h1>ohz · {data.shop.name}</h1>
         <span className="meta">
-          {data.totalProducts} SKUs · {data.totalOrders90d} orders / 90d · vertical: {data.shop.vertical}
+          {data.totalProducts} SKUs · {data.totalOrders90d} orders / 90d · vertical:{' '}
+          {data.shop.vertical}
         </span>
       </div>
+
+      {shops.length > 1 && (
+        <div className="shop-switcher" style={{ marginBottom: 14 }}>
+          <span>Shop:</span>
+          {shops.map(s => (
+            <a
+              key={s.id}
+              href={`/?shop=${encodeURIComponent(s.id)}`}
+              style={{ fontWeight: s.id === shopId ? 700 : 400, color: s.id === shopId ? 'var(--text)' : undefined }}
+            >
+              {s.name}
+            </a>
+          ))}
+          <a href="/import">+ import</a>
+        </div>
+      )}
+
+      {shops.length <= 1 && (
+        <div className="shop-switcher" style={{ marginBottom: 14 }}>
+          <a href="/import">Import sales data →</a>
+        </div>
+      )}
 
       <AlertBand alerts={data.alerts} />
 
