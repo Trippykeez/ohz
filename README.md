@@ -13,6 +13,27 @@ npm run engine:run    # mine itemsets, score, write suggestions + alerts
 npm run dev           # http://localhost:3000
 ```
 
+## Importing real sales data
+
+Until the TikTok Shop Partner API is wired up, sellers can export their orders
+as CSV from Seller Center (Orders → Manage Orders → Export) and upload them
+directly:
+
+1. `npm run dev` and open http://localhost:3000/import
+2. Enter a shop name, vertical, and your typical gross margin %
+3. Drop the CSV — the importer creates a shop, products, orders, and items,
+   then runs the bundle engine and links you straight to the dashboard
+
+The parser matches columns by name (with aliases) so most TikTok Shop export
+variants work without configuration. Cancelled and refunded rows are skipped.
+A synthetic sample is committed at [`samples/sample_orders.csv`](./samples/sample_orders.csv)
+so you can try the flow without a real export.
+
+Sales-only imports leave `stock_qty`, `days_in_stock`, and `trend_score` at
+neutral values, so the engine ranks on `affinity_lift` + `margin_uplift` only.
+Inventory- and trend-driven signals come back online once those data sources
+are connected.
+
 ## What's in the box
 
 - **Schema** (`src/db/schema.sql`) — `shops`, `products`, `orders`, `order_items`, `suggestions`, `suggestion_items`, `suggestion_outcomes`, `alerts`. SQLite for dev, Postgres-compatible subset.

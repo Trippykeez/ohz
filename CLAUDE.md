@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Status
 
-MVP scaffold landed. Stack is now **fully locked**: Node/TypeScript with Next.js (App Router) for both API and dashboard. SQLite is the dev/demo store via `better-sqlite3`; production swap path is Postgres (the schema in `src/db/schema.sql` stays inside a Postgres-compatible subset). No real TikTok Shop Partner API integration yet — the demo seed simulates 90 days of orders for one beauty shop. See **Commands** below.
+MVP scaffold landed. Stack is now **fully locked**: Node/TypeScript with Next.js (App Router) for both API and dashboard. SQLite is the dev/demo store via `better-sqlite3`; production swap path is Postgres (the schema in `src/db/schema.sql` stays inside a Postgres-compatible subset). No real TikTok Shop Partner API integration yet — the demo seed simulates 90 days of orders for one beauty shop, and a CSV import flow at `/import` (`src/import/`, `src/app/api/import/`) accepts TikTok Shop order exports so real-data runs are possible without API access. See **Commands** below.
 
 The Python/FastAPI alternative is shelved for now. Revisit only if a future workload (heavy ML training, scientific libraries) makes the Python ecosystem decisively better than the unified TypeScript stack.
 
@@ -58,8 +58,11 @@ These are not up for debate during implementation. If a task seems to violate on
 src/
   db/           schema.sql, client (better-sqlite3 singleton), init, seed
   engine/       affinity, scoring, archetypes, alerts, pipeline, run (CLI)
+  import/       parser (TikTok Shop CSV → rows), importer (rows → DB)
   lib/          types, queries (dashboard read model), random (seeded PRNG)
-  app/          page.tsx (dashboard), components/, api/{outcomes,regenerate}
+  app/          page.tsx (dashboard, ?shop=<id>), components/,
+                import/ (upload UI), api/{outcomes,regenerate,import}
+samples/        generate-sample.ts + sample_orders.csv (TikTok-shaped fixture)
 ```
 
 Suggestion lifecycle: `runPipeline(shopId)` wipes prior suggestions, mines itemsets from the rolling 90-day window, scores + classifies tier + detects archetype, picks at most one Strong-tier headline, persists to `suggestions` + `suggestion_items`, and writes alerts. The dashboard reads via `loadDashboard`. Outcomes posted to `/api/outcomes` append to `suggestion_outcomes` and feed the (future) learning-to-rank model.
@@ -142,6 +145,15 @@ npm run db:reset
 npm run engine:run       # generates suggestions + alerts
 npm run dev              # open http://localhost:3000
 ```
+
+To run the engine on real seller data (no Partner API needed yet), upload a
+TikTok Shop order export CSV at `http://localhost:3000/import`. The importer
+slugifies the shop name into a deterministic `shop_id`, replaces prior data
+for that shop, runs the pipeline, and links into the dashboard scoped to
+`?shop=<id>`. A synthetic fixture lives at `samples/sample_orders.csv` so the
+flow is testable without a real export. Sales-only imports leave inventory
+and trend signals neutral — those terms in `Score(B)` come back online once
+those data sources are connected.
 
 The dashboard re-runs the pipeline on demand via `POST /api/regenerate`. Outcome feedback (Adopt / Modify / Skip) posts to `POST /api/outcomes`.
 

@@ -209,3 +209,26 @@ a:hover { text-decoration: underline; }
 .outcomes-feed li { color: var(--text-dim); font-size: 13px; list-style: none; padding: 0; }
 
 .toolbar { display: flex; gap: 8px; align-items: center; }
+
+.text-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  max-width: 380px;
+}
+.text-input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+input[type="file"] { color: var(--text-dim); font-size: 13px; }
+
+.shop-switcher {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.shop-switcher a { color: var(--text-dim); }
+.shop-switcher a:hover { color: var(--text); }
