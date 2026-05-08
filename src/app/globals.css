@@ -233,6 +233,94 @@ input[type="file"] { color: var(--text-dim); font-size: 13px; }
 .shop-switcher a { color: var(--text-dim); }
 .shop-switcher a:hover { color: var(--text); }
 
+/* ───── InfoTip ───── */
+
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 5px;
+  cursor: help;
+  outline: none;
+  vertical-align: middle;
+}
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-style: italic;
+  font-family: Georgia, serif;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.info-tip:hover .info-icon,
+.info-tip:focus .info-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.info-bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(2px);
+  width: 240px;
+  padding: 9px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 50;
+}
+.info-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--border);
+}
+.info-tip:hover .info-bubble,
+.info-tip:focus .info-bubble,
+.info-tip:focus-within .info-bubble {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+/* Keep the bubble on screen near the right edge of narrow containers. */
+.phone-stats .info-bubble,
+.metrics .info-bubble,
+.projection-math .info-bubble {
+  max-width: min(240px, 80vw);
+}
+
+@media print {
+  .info-tip { display: none !important; }
+}
+
 /* ───── Live brief page ───── */
 
 .live-brief-page .container { max-width: 1100px; }

@@ -1,5 +1,6 @@
 import { initSchema, getDb } from '../../db/client.ts';
 import { loadLiveBrief } from '../../lib/live-brief.ts';
+import { InfoTip, WHY_THIS_TIPS } from '../components/InfoTip.tsx';
 import { ShowSimulator } from './ShowSimulator.tsx';
 
 export const dynamic = 'force-dynamic';
@@ -94,19 +95,31 @@ export default async function LiveBriefPage({
               <div className="phone-stats">
                 <div>
                   <div className="stat-num">{fmt$(projection.projectedRevenue)}</div>
-                  <div className="stat-lbl">projected revenue</div>
+                  <div className="stat-lbl">
+                    projected revenue
+                    <InfoTip text="Total $ if expected adopters all buy the bundle: expected_adoptions × sum of bundle prices. Top-line, before margin." />
+                  </div>
                 </div>
                 <div>
                   <div className="stat-num good">+{fmt$(projection.projectedMarginLift)}</div>
-                  <div className="stat-lbl">margin lift over solo</div>
+                  <div className="stat-lbl">
+                    margin lift over solo
+                    <InfoTip text="Extra $ profit vs. selling the same items separately. Conservative — assumes half of bundle adopters would have bought just the highest-margin item solo anyway, and only credits ohz for the difference." />
+                  </div>
                 </div>
                 <div>
                   <div className="stat-num">{projection.expectedLiveOrders}</div>
-                  <div className="stat-lbl">expected adoptions</div>
+                  <div className="stat-lbl">
+                    expected adoptions
+                    <InfoTip text="Projected number of bundle purchases for tonight's live: 80 baseline orders × the bundle's attach rate (which scales with affinity lift)." />
+                  </div>
                 </div>
                 <div>
                   <div className="stat-num">{liftPct > 0 ? `+${liftPct}%` : `${liftPct}%`}</div>
-                  <div className="stat-lbl">co-purchase lift</div>
+                  <div className="stat-lbl">
+                    co-purchase lift
+                    <InfoTip text="How much more often these items are bought together than chance would predict. +89% means the pair shares a basket 1.89× more often than independent purchase rates would suggest." />
+                  </div>
                 </div>
               </div>
 
@@ -172,7 +185,10 @@ export default async function LiveBriefPage({
             <div className="metrics" style={{ marginTop: 12 }}>
               {bundle.why.metrics.map(m => (
                 <div key={m.label} style={{ display: 'contents' }}>
-                  <span className="label">{m.label}</span>
+                  <span className="label">
+                    {m.label}
+                    {WHY_THIS_TIPS[m.label] && <InfoTip text={WHY_THIS_TIPS[m.label]} />}
+                  </span>
                   <span className="value">{m.value}</span>
                 </div>
               ))}
@@ -184,13 +200,29 @@ export default async function LiveBriefPage({
               Projection math
             </div>
             <ul className="projection-math">
-              <li>Assumed live orders: <strong>80</strong> (tunable)</li>
-              <li>Bundle attach rate: <strong>{fmtPct(projection.attachRate)}</strong> (scales with affinity lift)</li>
-              <li>Bundle adoptions: <strong>{projection.expectedLiveOrders}</strong></li>
-              <li>Bundle revenue: <strong>{fmt$(projection.projectedRevenue)}</strong></li>
-              <li>Baseline solo margin: <strong>{fmt$(projection.baselineMargin)}</strong></li>
+              <li>
+                Assumed live orders: <strong>80</strong> (tunable)
+                <InfoTip text="Baseline order count for a typical 1-hour TikTok Live show. Will become per-shop tunable once we observe each seller's actual live performance — open question #7 in CLAUDE.md." />
+              </li>
+              <li>
+                Bundle attach rate: <strong>{fmtPct(projection.attachRate)}</strong> (scales with affinity lift)
+                <InfoTip text="Share of live orders we expect to take the featured bundle. Baseline 8% × min(affinity_lift, 4×), capped at 45%. Higher-lift bundles attach better when called out in a live." />
+              </li>
+              <li>
+                Bundle adoptions: <strong>{projection.expectedLiveOrders}</strong>
+                <InfoTip text="assumed_live_orders × attach_rate. The number of bundle purchases we expect from this live." />
+              </li>
+              <li>
+                Bundle revenue: <strong>{fmt$(projection.projectedRevenue)}</strong>
+                <InfoTip text="adoptions × sum of bundle member prices. Gross top-line for the bundle slot." />
+              </li>
+              <li>
+                Baseline solo margin: <strong>{fmt$(projection.baselineMargin)}</strong>
+                <InfoTip text="The counterfactual we beat: half of bundle adopters would have bought just the highest-margin item solo even without ohz prompting the bundle. We only claim margin lift above this baseline." />
+              </li>
               <li className="lift-line">
                 Margin lift: <strong>+{fmt$(projection.projectedMarginLift)}</strong>
+                <InfoTip text="adoptions × bundle_margin − baseline_solo_margin. The dollar contribution we credit ohz for. This is the number that ends up in the 30-day impact ledger when the seller marks the bundle Adopted." />
               </li>
             </ul>
             <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 8, marginBottom: 0 }}>
