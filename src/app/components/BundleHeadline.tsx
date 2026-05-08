@@ -4,6 +4,7 @@ import { WhyThis } from './WhyThis.tsx';
 
 export function BundleHeadline({ data }: { data: DashboardSuggestion }) {
   const { suggestion, products, why } = data;
+  const briefHref = `/live-brief?shop=${encodeURIComponent(suggestion.shop_id)}&bundle=${encodeURIComponent(suggestion.id)}`;
   return (
     <div className="card headline">
       <div className="label">Today&apos;s bundle</div>
@@ -16,7 +17,10 @@ export function BundleHeadline({ data }: { data: DashboardSuggestion }) {
         ))}
       </div>
       <WhyThis why={why} />
-      <OutcomeButtons suggestionId={suggestion.id} initialStatus={data.outcome?.status ?? null} />
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+        <OutcomeButtons suggestionId={suggestion.id} initialStatus={data.outcome?.status ?? null} />
+        <a className="btn primary" href={briefHref}>Open live brief →</a>
+      </div>
     </div>
   );
 }
